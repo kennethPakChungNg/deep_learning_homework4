@@ -28,15 +28,15 @@ class MLPPlanner(nn.Module):
         self.mlp = nn.Sequential(
 
             # Input layer with n_track * 2 * 2 inputs -> 64 outputs
-            nn.Linear(n_track * 2 * 2, 64),
+            nn.Linear(n_track * 2 * 2, 128),
             nn.ReLU(),
 
             # Hidden layer with 64 inputs -> 64 outputs
-            nn.Linear(64, 64),
+            nn.Linear(128, 128),
             nn.ReLU(),
 
             # Output layer with 64 inputs -> 6 outputs (3 waypoints, each with x and y coordinates)
-            nn.Linear(64, 6),
+            nn.Linear(128, 6),
         )
 
     def forward(
