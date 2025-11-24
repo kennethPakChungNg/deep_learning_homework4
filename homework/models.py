@@ -166,6 +166,35 @@ class CNNPlanner(torch.nn.Module):
         self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN), persistent=False)
         self.register_buffer("input_std", torch.as_tensor(INPUT_STD), persistent=False)
 
+        self.conv = nn.Sequential(
+            # Layer 1: 3 -> 32 channels
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2), # 96x128 -> 48x64
+
+            # Layer 2: 32 -> 64 channels
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2), # 48x64 -> 24x32
+
+            # Layer 3: 64 -> 128 channels
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2), # 24x32 -> 12x16
+            
+            # Layer 4: 128 -> 128 channels
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2), # 12x16 -> 6x8
+        )
+
+        # Flatten size: 128 channels * 6 height * 8 width = 6144
+        self.mlp = nn.Sequential(
+            nn.Linear(6144, 128),
+            nn.ReLU(),
+            nn.Linear(128, n_waypoints * 2) # Output 6 values
+        )
+
     def forward(self, image: torch.Tensor, **kwargs) -> torch.Tensor:
         """
         Args:
@@ -177,7 +206,11 @@ class CNNPlanner(torch.nn.Module):
         x = image
         x = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
 
-        raise NotImplementedError
+        x = self.conv(x)
+        x = x.view(x.shape[0], -1) # Flatten
+        x = self.mlp(x)
+
+        return x.view(x.shape[0], self.n_waypoints, 2)
 
 
 MODEL_FACTORY = {
