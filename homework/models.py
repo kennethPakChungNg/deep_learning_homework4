@@ -100,6 +100,18 @@ class TransformerPlanner(nn.Module):
 
         self.query_embed = nn.Embedding(n_waypoints, d_model)
 
+        # Input layer: 2 -> 64
+        self.input_embed = nn.Linear(2, d_model)
+
+        # Transformer decoder layer: 64 -> 64, n head set to 4 because we are using 64 dimensions, set batch_first to True as we use batch first for input
+        self.transformer_decoder_layer = nn.TransformerDecoderLayer(d_model, nhead=4, batch_first=True)
+
+        # Transformer decoder: 64 -> 64
+        self.transformer_decoder = nn.TransformerDecoder(self.transformer_decoder_layer, num_layers=2)
+
+        # Output head: 64 -> 2
+        self.output_head = nn.Linear(d_model, 2)
+
     def forward(
         self,
         track_left: torch.Tensor,
@@ -119,7 +131,27 @@ class TransformerPlanner(nn.Module):
         Returns:
             torch.Tensor: future waypoints with shape (b, n_waypoints, 2)
         """
-        raise NotImplementedError
+        # 1. Combine inputs into a sequence (B, 20, 2)
+        x = torch.cat([track_left, track_right], dim=1)
+
+        # 2. Embed the sequence: (B, 20, 2) -> (B, 20, d_model)
+        # This projects the (x,y) coordinates into a higher dimensional feature space
+        x = self.input_embed(x)
+
+        # 3. Prepare Queries: (n_waypoints, d_model) -> (B, n_waypoints, d_model)
+        # Repeat the questions for every item in the batch
+        batch_size = x.shape[0]
+        query = self.query_embed.weight.unsqueeze(0).expand(batch_size, -1, -1)
+
+        # 4. Transformer decoder
+        # tgt = Queries (Questions), memory = x (The Map)
+        # Output: (B, n_waypoints, d_model)
+        out = self.transformer_decoder(tgt=query, memory=x)
+
+        # 5. Project back to (x,y): (B, n_waypoints, d_model) -> (B, n_waypoints, 2)
+        out = self.output_head(out)
+
+        return out
 
 
 class CNNPlanner(torch.nn.Module):
