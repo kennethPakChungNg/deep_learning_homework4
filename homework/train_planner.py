@@ -38,7 +38,7 @@ def train(
     # 3. Create Model, Optimizer, and Loss Function
     model = models.load_model(model_name).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    loss_fn = nn.MSELoss()
+    loss_fn = nn.L1Loss()
 
     # 4. Training Loop
     for epoch in range(num_epochs):
