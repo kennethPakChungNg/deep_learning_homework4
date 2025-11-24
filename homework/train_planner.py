@@ -83,7 +83,7 @@ if __name__ == "__main__":
     # Parse Arguments for tell the train function use what model, num epochs, lr, batch size, seed
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", type=str, default="mlp_planner")
-    parser.add_argument("--num_epochs", type=int, default=50)
+    parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--seed", type=int, default=2025)
