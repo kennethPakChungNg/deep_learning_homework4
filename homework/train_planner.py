@@ -34,11 +34,19 @@ def train(
         batch_size=batch_size,
         shuffle=True,
     )
+    val_loader = load_data(
+        "drive_data/val",
+        transform_pipeline="state_only",
+        batch_size=batch_size,
+        shuffle=False,
+    )
 
     # 3. Create Model, Optimizer, and Loss Function
     model = models.load_model(model_name).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.L1Loss()
+    
+    best_val_loss = float("inf")
 
     # 4. Training Loop
     for epoch in range(num_epochs):
@@ -70,11 +78,30 @@ def train(
             # Update total loss
             total_loss += loss.item()
 
-        print(f"Epoch {epoch}, Loss: {total_loss / len(train_loader):.4f}")
+        # Validation Loop
+        model.eval()
+        val_loss = 0.0
+        with torch.inference_mode():
+            for batch in val_loader:
+                track_left = batch["track_left"].to(device)
+                track_right = batch["track_right"].to(device)
+                waypoints = batch["waypoints"].to(device)
+                waypoints_mask = batch["waypoints_mask"].to(device)
 
-    # Save Model
-    models.save_model(model)
-    print(f"Model saved to {model_name}.th")
+                pred_waypoints = model(track_left, track_right)
+                mask = waypoints_mask[..., None]
+                loss = loss_fn(pred_waypoints * mask, waypoints * mask)
+                val_loss += loss.item()
+        
+        val_loss /= len(val_loader)
+        train_loss = total_loss / len(train_loader)
+        
+        print(f"Epoch {epoch}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            models.save_model(model)
+            print(f"Saved best model with val loss {val_loss:.4f}")
 
 
 # 5. Training Script
