@@ -24,24 +24,26 @@ class MLPPlanner(nn.Module):
         self.n_track = n_track
         self.n_waypoints = n_waypoints
 
-        # Define the MLP with one input layer, one hidden layer, and one output layer
-        self.mlp = nn.Sequential(
-
-            # Input layer with n_track * 2 * 2 inputs -> 256 outputs
+        # Input layer: 40 -> 256
+        self.input_layer = nn.Sequential(
             nn.Linear(n_track * 2 * 2, 256),
             nn.ReLU(),
-
-            # Hidden layer with 256 inputs -> 256 outputs
-            nn.Linear(256, 256),
-            nn.ReLU(),
-
-            # Extra Hidden layer with 256 inputs -> 256 outputs
-            nn.Linear(256, 256),
-            nn.ReLU(),
-
-            # Output layer with 256 inputs -> 6 outputs (3 waypoints, each with x and y coordinates)
-            nn.Linear(256, 6),
         )
+
+        # Hidden layers with residuals: 256 -> 256
+        self.hidden_layers = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(256, 256),
+                nn.ReLU(),
+            ),
+            nn.Sequential(
+                nn.Linear(256, 256),
+                nn.ReLU(),
+            ),
+        ])
+
+        # Output layer: 256 -> 6
+        self.output_layer = nn.Linear(256, 6)
 
     def forward(
         self,
@@ -66,9 +68,17 @@ class MLPPlanner(nn.Module):
         # Concatenate the left and right track points
         left_track = track_left.view(track_left.shape[0], -1)
         right_track = track_right.view(track_right.shape[0], -1)
+        x = torch.cat([left_track, right_track], dim=1)
 
-        # Pass the track points through the MLP to make it as a single vector
-        waypoints = self.mlp(torch.cat([left_track, right_track], dim=1))
+        # Pass through input layer
+        x = self.input_layer(x)
+
+        # Pass through hidden layers with residual connections
+        for layer in self.hidden_layers:
+            x = x + layer(x)
+
+        # Output layer
+        waypoints = self.output_layer(x)
 
         # Reshape the waypoints to 3 way points each with x and y coordinates (b, n_waypoints, 2)
         waypoints = waypoints.view(waypoints.shape[0], self.n_waypoints, 2)
