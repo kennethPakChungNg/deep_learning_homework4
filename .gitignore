@@ -1,0 +1,13 @@
+# Dataset
+drive_data/
+drive_data.zip
+
+# Model Checkpoints
+*.th
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Mac OS
+.DS_Store
