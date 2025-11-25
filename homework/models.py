@@ -158,6 +158,7 @@ class CNNPlanner(torch.nn.Module):
     def __init__(
         self,
         n_waypoints: int = 3,
+        batch_size: int = 128,
     ):
         super().__init__()
 
@@ -166,34 +167,26 @@ class CNNPlanner(torch.nn.Module):
         self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN), persistent=False)
         self.register_buffer("input_std", torch.as_tensor(INPUT_STD), persistent=False)
 
-        self.conv = nn.Sequential(
-            # Layer 1: 3 -> 32 channels
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+        # CNN layers
+        self.cnn = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size = 3, stride = 2, padding = 1),
             nn.ReLU(),
-            nn.MaxPool2d(2), # 96x128 -> 48x64
-
-            # Layer 2: 32 -> 64 channels
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.Conv2d(32, 64, kernel_size = 3, stride = 2, padding = 1),
             nn.ReLU(),
-            nn.MaxPool2d(2), # 48x64 -> 24x32
-
-            # Layer 3: 64 -> 128 channels
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.Conv2d(64, 128, kernel_size = 3, stride = 2, padding = 1),
             nn.ReLU(),
-            nn.MaxPool2d(2), # 24x32 -> 12x16
-            
-            # Layer 4: 128 -> 128 channels
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2), # 12x16 -> 6x8
+            nn.Conv2d(128, 256, kernel_size = 3, stride = 2, padding = 1),
+            nn.ReLU()
         )
 
-        # Flatten size: 128 channels * 6 height * 8 width = 6144
-        self.mlp = nn.Sequential(
-            nn.Linear(6144, 128),
+        # Fully connected layers
+        self.fc = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(256 * 6 * 8, 512),
             nn.ReLU(),
-            nn.Linear(128, n_waypoints * 2) # Output 6 values
+            nn.Linear(512, n_waypoints * 2)
         )
+
 
     def forward(self, image: torch.Tensor, **kwargs) -> torch.Tensor:
         """
@@ -206,10 +199,10 @@ class CNNPlanner(torch.nn.Module):
         x = image
         x = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
 
-        x = self.conv(x)
-        x = x.view(x.shape[0], -1) # Flatten
-        x = self.mlp(x)
+        x = self.cnn(x)
+        x = self.fc(x)
 
+        # return (batch_size, n_waypoints, 2)
         return x.view(x.shape[0], self.n_waypoints, 2)
 
 

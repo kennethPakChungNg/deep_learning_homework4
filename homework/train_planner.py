@@ -103,6 +103,93 @@ def train(
             models.save_model(model)
             print(f"Saved best model with val loss {val_loss:.4f}")
 
+def train_cnn(
+    exp_dir: str = "logs",
+    model_name: str = "cnn_planner",
+    num_epochs: int = 50,
+    lr: float = 1e-3,
+    batch_size: int = 128,
+    seed: int = 2025,
+    **kwargs,
+):
+    
+    # 1. Setup Device for Colab
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Colab Using Device: {device}")
+
+    # 2. Load data, MLP no need the images so the transform is state_only
+    train_loader = load_data(
+        "drive_data/train",
+        transform_pipeline="default",
+        batch_size=batch_size,
+        shuffle=True,
+    )
+    val_loader = load_data(
+        "drive_data/val",
+        transform_pipeline="default",
+        batch_size=batch_size,
+        shuffle=False,
+    )
+
+    # 3. Create Model, Optimizer, and Loss Function
+    model = models.load_model(model_name).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    loss_fn = nn.L1Loss()
+    
+    best_val_loss = float("inf")
+
+    # 4. Training Loop
+    for epoch in range(num_epochs):
+        
+        model.train()
+
+        total_loss = 0.0
+
+        for batch in train_loader:
+
+            # Move data to GPU Device
+            image = batch["image"].to(device)
+            waypoints = batch["waypoints"].to(device)
+            waypoints_mask = batch["waypoints_mask"].to(device)
+
+            # Forward Pass
+            pred_waypoints = model(image)
+
+            # Compute Loss in valid waypoints only by multiplying the mask
+            mask = waypoints_mask[..., None]
+            loss = loss_fn(pred_waypoints * mask, waypoints * mask)
+
+            # Backward Pass and Optimization
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Update total loss
+            total_loss += loss.item()
+
+        # Validation Loop
+        model.eval()
+        val_loss = 0.0
+        with torch.inference_mode():
+            for batch in val_loader:
+                image = batch["image"].to(device)
+                waypoints = batch["waypoints"].to(device)
+                waypoints_mask = batch["waypoints_mask"].to(device)
+
+                pred_waypoints = model(image)
+                mask = waypoints_mask[..., None]
+                loss = loss_fn(pred_waypoints * mask, waypoints * mask)
+                val_loss += loss.item()
+        
+        val_loss /= len(val_loader)
+        train_loss = total_loss / len(train_loader)
+        
+        print(f"Epoch {epoch}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            models.save_model(model)
+            print(f"Saved best model with val loss {val_loss:.4f}")
 
 # 5. Training Script
 if __name__ == "__main__":
@@ -118,7 +205,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Train Model
-    train(**vars(args))
+    if args.model_name == "mlp_planner" or args.model_name == "transformer_planner":
+        train(**vars(args))
+    elif args.model_name == "cnn_planner":
+        train_cnn(**vars(args))
+        
     
 
 
