@@ -175,16 +175,17 @@ class CNNPlanner(torch.nn.Module):
             nn.ReLU(),
             nn.Conv2d(64, 128, kernel_size = 3, stride = 2, padding = 1),
             nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size = 3, stride = 2, padding = 1),
+            nn.Conv2d(128, 128, kernel_size = 3, stride = 2, padding = 1),
             nn.ReLU()
         )
 
         # Fully connected layers
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(256 * 6 * 8, 512),
+            # 128 channels * 6 height * 8 width = 6144
+            nn.Linear(6144, 128),
             nn.ReLU(),
-            nn.Linear(512, n_waypoints * 2)
+            nn.Linear(128, n_waypoints * 2)
         )
 
 
